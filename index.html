@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aircraft Aerodynamics Simulator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0d1117;
+      --panel: #161b22;
+      --border: #30363d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --accent: #58a6ff;
+      --lift: #3fb950;
+      --drag: #f85149;
+      --thrust: #a371f7;
+      --weight: #d29922;
+      --velocity: #79c0ff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Outfit', sans-serif;
+      padding: 1.25rem;
+    }
+    h1 {
+      font-weight: 700;
+      font-size: 1.5rem;
+      margin: 0 0 0.25rem;
+      letter-spacing: -0.02em;
+    }
+    .subtitle {
+      color: var(--muted);
+      font-size: 0.875rem;
+      margin-bottom: 1.25rem;
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: 300px 1fr 340px;
+      gap: 1.25rem;
+      max-width: 1300px;
+      margin: 0 auto;
+    }
+    @media (max-width: 1000px) {
+      .layout { grid-template-columns: 1fr; }
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem;
+    }
+    .panel h2 {
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin: 0 0 0.75rem;
+      padding-bottom: 0.35rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .control {
+      margin-bottom: 0.85rem;
+    }
+    .control:last-child { margin-bottom: 0; }
+    .control label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.8rem;
+      margin-bottom: 0.25rem;
+    }
+    .control .value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--accent);
+    }
+    .control .unit { color: var(--muted); font-size: 0.7rem; margin-left: 2px; }
+    input[type="range"] {
+      width: 100%;
+      height: 5px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: var(--border);
+      border-radius: 3px;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+    }
+    .canvas-wrap {
+      position: relative;
+      background: linear-gradient(180deg, #0d1b2a 0%, #0d1117 50%);
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      overflow: hidden;
+      min-height: 420px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      min-height: 420px;
+    }
+    .results { display: flex; flex-direction: column; gap: 0.5rem; }
+    .result-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.45rem 0.6rem;
+      background: var(--bg);
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      font-size: 0.8rem;
+    }
+    .result-row .label { color: var(--muted); }
+    .result-row .num { font-family: 'JetBrains Mono', monospace; font-weight: 600; font-size: 0.85rem; }
+    .result-row.lift .num { color: var(--lift); }
+    .result-row.drag .num { color: var(--drag); }
+    .result-row.thrust .num { color: var(--thrust); }
+    .result-row.weight .num { color: var(--weight); }
+    .result-row.coef .num { color: var(--accent); }
+    .result-row.section {
+      margin-top: 0.5rem;
+      font-size: 0.7rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 0.25rem 0;
+    }
+    .status {
+      font-size: 0.75rem;
+      margin-top: 0.75rem;
+      padding-top: 0.75rem;
+      border-top: 1px solid var(--border);
+      line-height: 1.4;
+    }
+    .status.ok { color: var(--lift); }
+    .status.warn { color: var(--weight); }
+    .status.danger { color: var(--drag); }
+  </style>
+</head>
+<body>
+  <h1>Aircraft Aerodynamics Simulator</h1>
+  <p class="subtitle">Longitudinal forces and performance. Adjust inputs; aircraft and coefficients update in real time.</p>
+
+  <div class="layout">
+    <div class="panel">
+      <h2>Geometry</h2>
+      <div class="control">
+        <label><span>Wing area <i>S</i></span><span class="value" id="v-wing">20</span><span class="unit">m²</span></label>
+        <input type="range" id="wing" min="5" max="100" value="20" step="1">
+      </div>
+      <div class="control">
+        <label><span>Aspect ratio <i>AR</i></span><span class="value" id="v-ar">8</span></label>
+        <input type="range" id="ar" min="4" max="20" value="8" step="0.5">
+      </div>
+      <div class="control">
+        <label><span>Wing span <i>b</i> (derived)</span><span class="value" id="v-span">—</span><span class="unit">m</span></label>
+      </div>
+
+      <h2>Weight & loading</h2>
+      <div class="control">
+        <label><span>Mass <i>m</i></span><span class="value" id="v-mass">1000</span><span class="unit">kg</span></label>
+        <input type="range" id="mass" min="200" max="8000" value="1000" step="50">
+      </div>
+      <div class="control">
+        <label><span>Wing loading <i>W/S</i> (derived)</span><span class="value" id="v-wl">—</span><span class="unit">N/m²</span></label>
+      </div>
+
+      <h2>Flight condition</h2>
+      <div class="control">
+        <label><span>Altitude <i>h</i></span><span class="value" id="v-alt">0</span><span class="unit">m</span></label>
+        <input type="range" id="alt" min="0" max="12000" value="0" step="100">
+      </div>
+      <div class="control">
+        <label><span>True airspeed <i>V</i></span><span class="value" id="v-speed">50</span><span class="unit">m/s</span></label>
+        <input type="range" id="speed" min="15" max="200" value="50" step="1">
+      </div>
+      <div class="control">
+        <label><span>Angle of attack <i>α</i></span><span class="value" id="v-alpha">3</span><span class="unit">°</span></label>
+        <input type="range" id="alpha" min="-2" max="14" value="3" step="0.5">
+      </div>
+
+      <h2>Aerodynamic model</h2>
+      <div class="control">
+        <label><span>Lift slope <i>C<sub>Lα</sub></i></span><span class="value" id="v-cla">5.5</span><span class="unit">/rad</span></label>
+        <input type="range" id="cla" min="4" max="7" value="5.5" step="0.1">
+      </div>
+      <div class="control">
+        <label><span>Zero-lift drag <i>C<sub>D0</sub></i></span><span class="value" id="v-cd0">0.025</span></label>
+        <input type="range" id="cd0" min="0.01" max="0.06" value="0.025" step="0.002">
+      </div>
+      <div class="control">
+        <label><span>Oswald efficiency <i>e</i></span><span class="value" id="v-e">0.82</span></label>
+        <input type="range" id="e" min="0.6" max="0.95" value="0.82" step="0.01">
+      </div>
+      <div class="control">
+        <label><span>Stall <i>α</i> (reference)</span><span class="value" id="v-stall">14</span><span class="unit">°</span></label>
+        <input type="range" id="astall" min="10" max="18" value="14" step="0.5">
+      </div>
+
+      <h2>Propulsion</h2>
+      <div class="control">
+        <label><span>Max thrust <i>T<sub>max</sub></i></span><span class="value" id="v-tmax">5000</span><span class="unit">N</span></label>
+        <input type="range" id="tmax" min="0" max="20000" value="5000" step="200">
+      </div>
+      <div class="control">
+        <label><span>Throttle <i>δ<sub>T</sub></i></span><span class="value" id="v-throttle">1.00</span></label>
+        <input type="range" id="throttle" min="0" max="1" value="1" step="0.05">
+      </div>
+    </div>
+
+    <div class="panel canvas-wrap">
+      <canvas id="canvas" width="700" height="420"></canvas>
+    </div>
+
+    <div class="panel">
+      <h2>Forces (N)</h2>
+      <div class="results">
+        <div class="result-row lift"><span class="label">Lift <i>L</i></span><span class="num" id="out-lift">—</span></div>
+        <div class="result-row weight"><span class="label">Weight <i>W</i></span><span class="num" id="out-weight">—</span></div>
+        <div class="result-row thrust"><span class="label">Thrust <i>T</i></span><span class="num" id="out-thrust">—</span></div>
+        <div class="result-row drag"><span class="label">Drag <i>D</i></span><span class="num" id="out-drag">—</span></div>
+        <div class="result-row"><span class="label">Thrust required (level)</span><span class="num" id="out-treq">—</span></div>
+        <div class="result-row"><span class="label">Excess thrust <i>T − D</i></span><span class="num" id="out-excess">—</span></div>
+      </div>
+      <div class="result-row section">Coefficients & performance</div>
+      <div class="results">
+        <div class="result-row coef"><span class="label"><i>C<sub>L</sub></i></span><span class="num" id="out-cl">—</span></div>
+        <div class="result-row coef"><span class="label"><i>C<sub>D</sub></i></span><span class="num" id="out-cd">—</span></div>
+        <div class="result-row coef"><span class="label">L/D</span><span class="num" id="out-ld">—</span></div>
+        <div class="result-row"><span class="label">Dynamic pressure <i>q</i></span><span class="num" id="out-q">—</span><span style="font-size:0.7rem;color:var(--muted)"> Pa</span></div>
+        <div class="result-row"><span class="label">Air density <i>ρ</i></span><span class="num" id="out-rho">—</span><span style="font-size:0.7rem;color:var(--muted)"> kg/m³</span></div>
+        <div class="result-row"><span class="label">Stall speed <i>V<sub>s</sub></i></span><span class="num" id="out-vs">—</span><span style="font-size:0.7rem;color:var(--muted)"> m/s</span></div>
+        <div class="result-row"><span class="label">Rate of climb (approx)</span><span class="num" id="out-roc">—</span><span style="font-size:0.7rem;color:var(--muted)"> m/s</span></div>
+        <div class="result-row"><span class="label">α margin to stall</span><span class="num" id="out-margin">—</span><span style="font-size:0.7rem;color:var(--muted)"> °</span></div>
+      </div>
+      <p class="status" id="status">—</p>
+    </div>
+  </div>
+
+  <script>
+    const GRAVITY = 9.81;
+    const RHO_SEA_LEVEL = 1.225;
+    const TEMP_SEA_LEVEL = 288.15;
+    const LAPSE_RATE = 0.0065;
+    const GAS_CONSTANT = 287.05;
+    const MOLAR_AIR = 0.0289644;
+
+    function airDensity(altitudeM) {
+      if (altitudeM <= 0) return RHO_SEA_LEVEL;
+      if (altitudeM > 11000) {
+        const T11 = TEMP_SEA_LEVEL - LAPSE_RATE * 11000;
+        const rho11 = RHO_SEA_LEVEL * Math.pow(T11 / TEMP_SEA_LEVEL, (GRAVITY * MOLAR_AIR) / (GAS_CONSTANT * LAPSE_RATE) - 1);
+        return rho11 * Math.exp(-0.000157 * (altitudeM - 11000));
+      }
+      const T = TEMP_SEA_LEVEL - LAPSE_RATE * altitudeM;
+      return RHO_SEA_LEVEL * Math.pow(T / TEMP_SEA_LEVEL, (GRAVITY * MOLAR_AIR) / (GAS_CONSTANT * LAPSE_RATE) - 1);
+    }
+
+    function liftCoefficient(alphaRad, clAlpha) { return clAlpha * alphaRad; }
+    function dragCoefficient(cl, cd0, ar, e) {
+      if (ar <= 0 || e <= 0) return cd0;
+      return cd0 + (cl * cl) / (Math.PI * e * ar);
+    }
+    function dynamicPressure(rho, v) { return 0.5 * rho * v * v; }
+
+    function compute(params) {
+      const rho = airDensity(params.altitude_m);
+      const alphaRad = params.angle_of_attack_deg * Math.PI / 180;
+      const cl = liftCoefficient(alphaRad, params.cl_alpha);
+      const cd = dragCoefficient(cl, params.cd0, params.aspect_ratio, params.oswald);
+      const q = dynamicPressure(rho, params.airspeed_m_s);
+      const lift = q * params.wing_area_m2 * cl;
+      const drag = q * params.wing_area_m2 * cd;
+      const weight = params.mass_kg * GRAVITY;
+      const thrust = params.max_thrust_N * Math.max(0, Math.min(1, params.thrust_ratio));
+      const span_m = Math.sqrt(params.aspect_ratio * params.wing_area_m2);
+      const wingLoading = weight / params.wing_area_m2;
+      const clMax = params.cl_alpha * (params.alpha_stall_deg * Math.PI / 180);
+      const stallSpeed = Math.sqrt((2 * weight) / (rho * params.wing_area_m2 * clMax)) || 0;
+      const excessThrust = thrust - drag;
+      const rateOfClimb = weight > 0 ? (excessThrust * params.airspeed_m_s) / weight : 0;
+      const alphaMargin = params.alpha_stall_deg - params.angle_of_attack_deg;
+
+      return {
+        lift, drag, weight, thrust,
+        thrust_required: drag,
+        excess_thrust: excessThrust,
+        rho, q, cl, cd,
+        L_over_D: cd > 0 ? lift / drag : 0,
+        stall_speed: stallSpeed,
+        rate_of_climb: rateOfClimb,
+        alpha_margin_deg: alphaMargin,
+        span_m,
+        wing_loading_N_m2: wingLoading
+      };
+    }
+
+    function getParams() {
+      const wing = Number(document.getElementById('wing').value);
+      const ar = Number(document.getElementById('ar').value);
+      return {
+        mass_kg: Number(document.getElementById('mass').value),
+        wing_area_m2: wing,
+        aspect_ratio: ar,
+        altitude_m: Number(document.getElementById('alt').value),
+        airspeed_m_s: Number(document.getElementById('speed').value),
+        angle_of_attack_deg: Number(document.getElementById('alpha').value),
+        cl_alpha: Number(document.getElementById('cla').value),
+        cd0: Number(document.getElementById('cd0').value),
+        oswald: Number(document.getElementById('e').value),
+        alpha_stall_deg: Number(document.getElementById('astall').value),
+        max_thrust_N: Number(document.getElementById('tmax').value),
+        thrust_ratio: Number(document.getElementById('throttle').value)
+      };
+    }
+
+    function updateValueDisplays(p, f) {
+      document.getElementById('v-wing').textContent = p.wing_area_m2;
+      document.getElementById('v-ar').textContent = p.aspect_ratio;
+      document.getElementById('v-span').textContent = f.span_m != null ? f.span_m.toFixed(2) : '—';
+      document.getElementById('v-mass').textContent = p.mass_kg;
+      document.getElementById('v-wl').textContent = f.wing_loading_N_m2 != null ? Math.round(f.wing_loading_N_m2) : '—';
+      document.getElementById('v-alt').textContent = p.altitude_m;
+      document.getElementById('v-speed').textContent = p.airspeed_m_s;
+      document.getElementById('v-alpha').textContent = p.angle_of_attack_deg;
+      document.getElementById('v-cla').textContent = p.cl_alpha.toFixed(1);
+      document.getElementById('v-cd0').textContent = p.cd0.toFixed(3);
+      document.getElementById('v-e').textContent = p.oswald.toFixed(2);
+      document.getElementById('v-stall').textContent = p.alpha_stall_deg;
+      document.getElementById('v-tmax').textContent = p.max_thrust_N;
+      document.getElementById('v-throttle').textContent = p.thrust_ratio.toFixed(2);
+    }
+
+    function updateResults(f) {
+      document.getElementById('out-lift').textContent = f.lift.toFixed(1);
+      document.getElementById('out-weight').textContent = f.weight.toFixed(1);
+      document.getElementById('out-thrust').textContent = f.thrust.toFixed(1);
+      document.getElementById('out-drag').textContent = f.drag.toFixed(1);
+      document.getElementById('out-treq').textContent = f.thrust_required.toFixed(1);
+      document.getElementById('out-excess').textContent = f.excess_thrust.toFixed(1);
+      document.getElementById('out-cl').textContent = f.cl.toFixed(3);
+      document.getElementById('out-cd').textContent = f.cd.toFixed(4);
+      document.getElementById('out-ld').textContent = f.L_over_D.toFixed(2);
+      document.getElementById('out-q').textContent = Math.round(f.q);
+      document.getElementById('out-rho').textContent = f.rho.toFixed(4);
+      document.getElementById('out-vs').textContent = f.stall_speed.toFixed(1);
+      document.getElementById('out-roc').textContent = f.rate_of_climb.toFixed(2);
+      document.getElementById('out-margin').textContent = f.alpha_margin_deg.toFixed(1);
+
+      const status = document.getElementById('status');
+      const liftOk = Math.abs(f.lift - f.weight) < f.weight * 0.05;
+      const thrustOk = Math.abs(f.thrust - f.thrust_required) < Math.max(f.thrust_required * 0.05, 10);
+      if (f.alpha_margin_deg < 2) {
+        status.textContent = 'Low α margin — near stall. Reduce α or increase V.';
+        status.className = 'status danger';
+      } else if (liftOk && thrustOk) {
+        status.textContent = 'Steady level flight: L ≈ W, T ≈ D.';
+        status.className = 'status ok';
+      } else {
+        const parts = [];
+        if (!liftOk) parts.push(f.lift > f.weight ? 'Climbing (L > W)' : 'Descending (L < W)');
+        if (!thrustOk) parts.push(f.thrust > f.thrust_required ? 'Accelerating (T > D)' : 'Decelerating (T < D)');
+        status.textContent = parts.join('. ');
+        status.className = 'status warn';
+      }
+    }
+
+    function drawAircraft(params, f) {
+      const canvas = document.getElementById('canvas');
+      const ctx = canvas.getContext('2d');
+      const w = canvas.width;
+      const h = canvas.height;
+      const cx = w * 0.5;
+      const cy = h * 0.45;
+      const alphaRad = params.angle_of_attack_deg * Math.PI / 180;
+      const cos = Math.cos(alphaRad);
+      const sin = Math.sin(alphaRad);
+
+      ctx.fillStyle = 'rgba(13, 17, 23, 0.95)';
+      ctx.fillRect(0, 0, w, h);
+
+      const scale = 2.2;
+      const L = 80;
+      const H = 14;
+      const wingChord = 28;
+      const wingY = -2;
+      const tailChord = 12;
+      const tailY = 0;
+      const tailX = 32;
+
+      function bodyToScreen(x, y) {
+        const xb = x * scale;
+        const yb = y * scale;
+        return { x: cx + xb * cos - yb * sin, y: cy + xb * sin + yb * cos };
+      }
+
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(alphaRad);
+      ctx.scale(scale, scale);
+
+      ctx.strokeStyle = '#8b949e';
+      ctx.lineWidth = 1.5 / scale;
+      ctx.fillStyle = '#21262d';
+
+      const fuselage = new Path2D();
+      const n = 24;
+      for (let i = 0; i <= n; i++) {
+        const t = (i / n) * 2 - 1;
+        const x = t * (L / 2);
+        const y = (H / 2) * (1 - t * t) * 0.85;
+        if (i === 0) fuselage.moveTo(x, y);
+        else fuselage.lineTo(x, y);
+      }
+      for (let i = n; i >= 0; i--) {
+        const t = (i / n) * 2 - 1;
+        const x = t * (L / 2);
+        const y = -(H / 2) * (1 - t * t) * 0.85;
+        fuselage.lineTo(x, y);
+      }
+      fuselage.closePath();
+      ctx.fill(fuselage);
+      ctx.stroke(fuselage);
+
+      ctx.fillStyle = '#30363d';
+      ctx.strokeStyle = '#8b949e';
+      ctx.beginPath();
+      ctx.moveTo(-wingChord / 2, wingY);
+      ctx.lineTo(wingChord / 2, wingY);
+      ctx.lineTo(wingChord / 2 - 4, wingY + 3);
+      ctx.lineTo(-wingChord / 2 + 4, wingY + 3);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(tailX, tailY);
+      ctx.lineTo(tailX + tailChord, tailY);
+      ctx.lineTo(tailX + tailChord - 2, tailY + 1.5);
+      ctx.lineTo(tailX + 2, tailY + 1.5);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.restore();
+
+      const maxF = Math.max(f.lift, f.weight, f.drag, f.thrust, 3000);
+      const Fscale = (55 * scale) / maxF;
+
+      function drawArrow(originX, originY, dx, dy, color, label) {
+        const len = Math.sqrt(dx * dx + dy * dy) || 1;
+        const sx = (dx / len) * Math.min(len, maxF) * Fscale;
+        const sy = (dy / len) * Math.min(len, maxF) * Fscale;
+        const x1 = originX + sx;
+        const y1 = originY + sy;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(originX, originY);
+        ctx.lineTo(x1, y1);
+        ctx.stroke();
+        const ax = -sy * 0.2;
+        const ay = sx * 0.2;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x1 + ax, y1 + ay);
+        ctx.lineTo(x1 - ax, y1 - ay);
+        ctx.closePath();
+        ctx.fillStyle = color;
+        ctx.fill();
+        ctx.font = '11px Outfit';
+        ctx.fillStyle = color;
+        ctx.fillText(label, x1 + 6, y1 + 4);
+      }
+
+      const wingAC = bodyToScreen(0, wingY);
+      const cg = bodyToScreen(0, 0);
+      const engine = bodyToScreen(-L / 2 - 5, 0);
+
+      drawArrow(wingAC.x, wingAC.y, -sin * f.lift, -cos * f.lift, '#3fb950', 'L');
+      drawArrow(cg.x, cg.y, 0, f.weight, '#d29922', 'W');
+      drawArrow(engine.x, engine.y, cos * f.thrust, -sin * f.thrust, '#a371f7', 'T');
+      drawArrow(wingAC.x, wingAC.y, -cos * f.drag, sin * f.drag, '#f85149', 'D');
+
+      const velLen = 35;
+      const vx = cos * velLen;
+      const vy = -sin * velLen;
+      ctx.strokeStyle = '#79c0ff';
+      ctx.setLineDash([4, 4]);
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + vx, cy + vy);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = '#79c0ff';
+      ctx.font = '10px Outfit';
+      ctx.fillText('V', cx + vx + 4, cy + vy);
+
+      ctx.fillStyle = '#8b949e';
+      ctx.font = '10px Outfit';
+      ctx.fillText('α = ' + params.angle_of_attack_deg.toFixed(1) + '°', cx + 120, cy - 80);
+    }
+
+    function run() {
+      const params = getParams();
+      const f = compute(params);
+      updateValueDisplays(params, f);
+      updateResults(f);
+      drawAircraft(params, f);
+    }
+
+    ['wing', 'ar', 'mass', 'alt', 'speed', 'alpha', 'cla', 'cd0', 'e', 'astall', 'tmax', 'throttle'].forEach(id => {
+      document.getElementById(id).addEventListener('input', run);
+    });
+    run();
+  </script>
+</body>
+</html>

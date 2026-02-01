@@ -1,0 +1,4 @@
+# No external dependencies required for core simulation.
+# Optional for plotting:
+# numpy>=1.20
+# matplotlib>=3.5

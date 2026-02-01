@@ -109,3 +109,4 @@ Math Genius/
 - Time-stepping uses a simplified longitudinal model (thrust–drag along path, simple climb/descent from excess/deficit thrust).
 
 You can extend the model with stall curves, different atmosphere models, or 6-DOF dynamics as needed.
+# aircraft-aerodynamics
